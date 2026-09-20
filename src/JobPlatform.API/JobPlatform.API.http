@@ -1,0 +1,6 @@
+@JobPlatform_API_HostAddress = http://localhost:5212
+
+GET {{JobPlatform_API_HostAddress}}/swagger/
+Accept: text/html
+
+###
