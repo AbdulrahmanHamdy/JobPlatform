@@ -1,4 +1,5 @@
-﻿using JobPlatform.Application.Common.Interfaces;
+﻿using Hangfire;
+using JobPlatform.Application.Common.Interfaces;
 using JobPlatform.Infrastructure.Identity;
 using JobPlatform.Infrastructure.Persistence;
 using JobPlatform.Infrastructure.Services;
@@ -45,6 +46,9 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
+
+        // Background job scheduler abstraction (implementation uses Hangfire via IBackgroundJobClient)
+        services.AddScoped<IJobSchedulerService, JobSchedulerService>();
 
         return services;
     }

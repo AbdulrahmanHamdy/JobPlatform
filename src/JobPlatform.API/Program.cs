@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Hangfire;
 using JobPlatform.API.Middleware;
 using JobPlatform.Application;
 using JobPlatform.Infrastructure;
@@ -16,9 +17,23 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
         // Add layer services
         builder.Services.AddApplicationServices();
         builder.Services.AddInfrastructureServices(builder.Configuration);
+
+        // Hangfire — registered here in API because AddHangfire/AddHangfireServer
+        // extension methods come from Hangfire.AspNetCore (API dependency).
+        // Infrastructure job classes and IJobSchedulerService are registered there.
+        builder.Services.AddHangfire(config => config
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(connectionString));
+
+        builder.Services.AddHangfireServer();
 
         // Configure Authentication & JWT
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -47,11 +62,10 @@ public class Program
         });
 
         builder.Services.AddAuthorization();
-
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
 
-        // Configure Swagger with JWT Bearer support
+        // Swagger with JWT Bearer support
         builder.Services.AddSwaggerGen(options =>
         {
             options.SwaggerDoc("v1", new OpenApiInfo
@@ -76,11 +90,7 @@ public class Program
                 {
                     new OpenApiSecurityScheme
                     {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "Bearer"
-                        }
+                        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
                     },
                     Array.Empty<string>()
                 }
@@ -92,7 +102,6 @@ public class Program
         // Centralized Exception Handling Middleware
         app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-        // Configure HTTP request pipeline
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
@@ -103,13 +112,18 @@ public class Program
         }
 
         app.UseHttpsRedirection();
-
         app.UseAuthentication();
         app.UseAuthorization();
-
         app.MapControllers();
 
-        // Apply migrations and seed initial roles safely on startup
+        // Hangfire dashboard at /hangfire
+        // TODO: add authorization filter before deploying to production
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = []
+        });
+
+        // Apply EF migrations + seed roles on startup
         try
         {
             using var scope = app.Services.CreateScope();

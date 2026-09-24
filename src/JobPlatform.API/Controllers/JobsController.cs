@@ -1,4 +1,5 @@
-﻿using JobPlatform.Application.Jobs.Commands.ApplyToJob;
+﻿using JobPlatform.Application.Jobs.Commands.ScheduleJobClosure;
+using JobPlatform.Application.Jobs.Commands.ApplyToJob;
 using JobPlatform.Application.Jobs.Commands.CloseJob;
 using JobPlatform.Application.Jobs.Commands.CreateJob;
 using JobPlatform.Domain.Constants;
@@ -33,4 +34,24 @@ public class JobsController : ApiControllerBase
         await Mediator.Send(new CloseJobCommand(jobId), cancellationToken);
         return NoContent();
     }
+
+    /// <summary>
+    /// Schedules a job to be closed automatically at the given UTC time.
+    /// Returns the Hangfire job ID.
+    /// </summary>
+    [HttpPost("{jobId}/schedule-close")]
+    [Authorize(Roles = Roles.Recruiter)]
+    public async Task<IActionResult> ScheduleClose(Guid jobId, ScheduleCloseRequest request, CancellationToken cancellationToken)
+    {
+        var hangfireJobId = await Mediator.Send(
+            new ScheduleJobClosureCommand(jobId, request.CloseAt), cancellationToken);
+
+        return Accepted(new { HangfireJobId = hangfireJobId, ScheduledFor = request.CloseAt });
+    }
 }
+
+/// <summary>
+/// Request body for schedule-close. Only CloseAt is accepted from the caller;
+/// JobId always comes from the route.
+/// </summary>
+public record ScheduleCloseRequest(DateTimeOffset CloseAt);
